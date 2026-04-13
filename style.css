@@ -1,0 +1,680 @@
+/* ============================================================
+   RED LIGHT, GREEN LIGHT — STYLESHEET
+   2-screen scrolling layout with big doll watcher
+   ============================================================ */
+
+/* ---------- RESET & BASE ---------- */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #111827;
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: #fff;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* ---------- GAME WRAPPER (viewport — clips the wider stage) ---------- */
+#game-wrapper {
+    /* Viewport = 1 screen.  The stage inside is 2x this width. */
+    width: 1365px;
+    height: 768px;
+    position: relative;
+    overflow: hidden;          /* <-- clips the 2-screen stage */
+    transform-origin: center center;
+    border-radius: 8px;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- GAME STAGE (2-screen wide, translated by camera) ---------- */
+#game-stage {
+    /* Width set by JS: SETTINGS.totalWidth (default 2730px) */
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    /* Camera scrolling is done via transform: translateX in JS */
+    will-change: transform;
+}
+
+/* ---------- BACKGROUND TILES ---------- */
+.bg-tile {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 1365px;            /* matches viewport width */
+    object-fit: cover;
+    z-index: 0;
+    pointer-events: none;
+}
+
+#bg-tile-1 { left: 0; }
+#bg-tile-2 { left: 1365px; } /* second screen */
+
+/* Subtle seam-hiding gradient between the two backgrounds */
+#game-stage::before {
+    content: '';
+    position: absolute;
+    left: 1340px;
+    top: 0;
+    width: 50px;
+    height: 100%;
+    background: linear-gradient(to right, transparent, rgba(0,0,0,0.08), transparent);
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* ---------- START & FINISH LINES ---------- */
+#start-line {
+    position: absolute;
+    width: 3px;
+    height: 220px;
+    bottom: 40px;
+    left: 70px;
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.7) 0px,
+        rgba(255, 255, 255, 0.7) 10px,
+        transparent 10px,
+        transparent 20px
+    );
+    z-index: 2;
+    opacity: 0.6;
+}
+
+#finish-line {
+    position: absolute;
+    width: 6px;
+    height: 340px;
+    bottom: 20px;
+    /* left set by JS from SETTINGS.finishLineX */
+    background: linear-gradient(
+        to bottom,
+        rgba(255, 215, 0, 0.0),
+        rgba(255, 215, 0, 0.9) 15%,
+        rgba(255, 165, 0, 0.9) 80%,
+        rgba(255, 215, 0, 0.0)
+    );
+    z-index: 2;
+    border-radius: 3px;
+    animation: finishGlow 1.8s ease-in-out infinite alternate;
+}
+
+#finish-flag {
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.9);
+    white-space: nowrap;
+}
+
+@keyframes finishGlow {
+    0%   { box-shadow: 0 0 14px rgba(255, 215, 0, 0.4), 0 0 35px rgba(255, 215, 0, 0.15); }
+    100% { box-shadow: 0 0 26px rgba(255, 215, 0, 0.7), 0 0 60px rgba(255, 215, 0, 0.3); }
+}
+
+/* ---------- CHARACTERS (generic) ---------- */
+.character {
+    position: absolute;
+    z-index: 5;
+    /* left and bottom set by JS */
+}
+
+.character img {
+    display: block;
+    height: 100%; /* height controlled by parent */
+    width: auto;
+    pointer-events: none;
+}
+
+/* Shadow under characters */
+.char-shadow {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70%;
+    height: 12px;
+    background: radial-gradient(ellipse, rgba(0, 0, 0, 0.28) 0%, transparent 70%);
+    border-radius: 50%;
+    z-index: -1;
+}
+
+/* ---------- WATCHER / BIG DOLL (fixed in viewport, always visible) ---------- */
+#watcher {
+    position: absolute;
+    right: 30px;               /* pinned to right side of viewport */
+    bottom: 2px;               /* feet near ground */
+    height: 560px;             /* BIG imposing doll */
+    z-index: 8;                /* above stage, below HUD & overlays */
+    pointer-events: none;
+}
+
+#watcher img {
+    display: block;
+    height: 100%;
+    width: auto;
+    pointer-events: none;
+}
+
+/* Larger shadow for the big doll */
+#watcher .watcher-shadow {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45%;
+    height: 24px;
+    background: radial-gradient(ellipse, rgba(0, 0, 0, 0.35) 0%, transparent 70%);
+    border-radius: 50%;
+}
+
+/* Watcher turning transition */
+#watcher-sprite {
+    transition: opacity 0.15s ease;
+}
+#watcher.turning #watcher-sprite {
+    opacity: 0.25;
+    transform: scaleX(0.9);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+/* ---------- NPC states ---------- */
+#npc.eliminated {
+    opacity: 0;
+    transition: opacity 1.2s ease;
+    pointer-events: none;
+}
+
+#npc.eliminated-flash img {
+    filter: brightness(0.4) saturate(0.3);
+}
+
+/* Smooth NPC position for AI movement */
+#npc {
+    transition: left 0.08s linear;
+}
+
+/* No position transition on player (instant responsiveness) */
+#player {
+    transition: none;
+}
+
+/* ---------- CHARACTER LABELS ---------- */
+.character .char-label {
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#player .char-label {
+    background: rgba(34, 197, 94, 0.85);
+    color: #fff;
+}
+
+#npc .char-label {
+    background: rgba(59, 130, 246, 0.75);
+    color: #fff;
+}
+
+/* ---------- ELIMINATION FLASH ---------- */
+#elimination-flash {
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* Must cover full 2-screen stage width */
+    width: 100%;
+    height: 100%;
+    background: rgba(220, 38, 38, 0.0);
+    z-index: 50;
+    pointer-events: none;
+    transition: background 0.12s ease;
+}
+
+#elimination-flash.active {
+    background: rgba(220, 38, 38, 0.35);
+}
+
+/* ---------- VIGNETTE on viewport ---------- */
+/* Placed on the wrapper so it stays fixed while stage scrolls */
+#game-wrapper::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.25) 100%);
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* ---------- HUD ---------- */
+#hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.0) 100%);
+    z-index: 20;
+}
+
+#hud-left, #hud-center, #hud-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#hud-center {
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Timer */
+#timer-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 4px 14px;
+    border-radius: 8px;
+}
+
+#timer-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    opacity: 0.7;
+}
+
+#timer-display {
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 36px;
+    text-align: center;
+}
+
+/* Light indicator */
+#light-indicator {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 3px 24px;
+    border-radius: 6px;
+    transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+
+#light-indicator.green {
+    background: rgba(34, 197, 94, 0.25);
+    color: #4ade80;
+    box-shadow: 0 0 16px rgba(34, 197, 94, 0.3);
+    animation: pulseGreen 1.2s ease-in-out infinite;
+}
+
+#light-indicator.red {
+    background: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.4);
+    animation: pulseRed 0.7s ease-in-out infinite;
+}
+
+@keyframes pulseGreen {
+    0%, 100% { box-shadow: 0 0 16px rgba(34, 197, 94, 0.3); }
+    50%      { box-shadow: 0 0 28px rgba(34, 197, 94, 0.55); }
+}
+
+@keyframes pulseRed {
+    0%, 100% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.4); }
+    50%      { box-shadow: 0 0 30px rgba(239, 68, 68, 0.7); }
+}
+
+/* Status text */
+#status-text {
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.85;
+    letter-spacing: 1px;
+    min-height: 16px;
+}
+
+/* HUD buttons */
+#hud-right button {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#hud-right button:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+#mute-btn {
+    font-size: 18px !important;
+    padding: 4px 10px !important;
+    line-height: 1;
+}
+
+/* ---------- OVERLAYS (shared) ---------- */
+.overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 30, 0.82);
+    z-index: 100;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: fadeIn 0.35s ease;
+}
+
+.poster-overlay {
+    background:
+        linear-gradient(rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.26)),
+        url("game poster.jpeg") center/cover no-repeat;
+    background-blend-mode: overlay;
+}
+
+.poster-overlay .poster-actions {
+    position: absolute;
+    top: 28px;
+    right: 28px;
+}
+
+.poster-overlay .poster-title {
+    position: absolute;
+    top: 28px;
+    left: 28px;
+    color: #fff;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-shadow: 0 0 26px rgba(0, 0, 0, 0.55);
+}
+
+.overlay.hidden {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.overlay-content {
+    text-align: center;
+    padding: 40px 50px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    max-width: 620px;
+    width: 90%;
+}
+
+.overlay-content h1 {
+    font-size: 36px;
+    font-weight: 800;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+}
+
+.overlay-content .subtitle {
+    font-size: 14px;
+    opacity: 0.7;
+    margin-bottom: 28px;
+}
+
+/* ---------- CHARACTER SELECT ---------- */
+#char-select-grid {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.char-card {
+    width: 200px;
+    padding: 20px 16px 16px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.char-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(255, 215, 0, 0.6);
+    box-shadow: 0 8px 30px rgba(255, 215, 0, 0.15);
+}
+
+.char-card.selected {
+    border-color: #fbbf24;
+    box-shadow: 0 0 24px rgba(251, 191, 36, 0.35);
+    background: rgba(251, 191, 36, 0.1);
+}
+
+.char-card img {
+    height: 180px;
+    width: auto;
+    display: block;
+    margin: 0 auto 12px;
+    pointer-events: none;
+}
+
+.char-name {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+/* ---------- INTRO OVERLAY ---------- */
+.intro-content h1 {
+    font-size: 42px;
+    background: linear-gradient(135deg, #4ade80, #fbbf24);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.instructions {
+    text-align: left;
+    margin: 24px auto;
+    max-width: 400px;
+}
+
+.instructions p {
+    font-size: 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.5;
+}
+
+.dot {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.green-dot {
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+.red-dot {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+kbd {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+}
+
+/* ---------- COUNTDOWN OVERLAY ---------- */
+#countdown-overlay {
+    background: rgba(10, 10, 30, 0.7);
+}
+
+#countdown-text {
+    font-size: 140px;
+    font-weight: 900;
+    color: #fbbf24;
+    text-shadow: 0 0 40px rgba(251, 191, 36, 0.5);
+    animation: countPop 0.5s ease;
+}
+
+@keyframes countPop {
+    0%   { transform: scale(1.6); opacity: 0; }
+    60%  { transform: scale(0.95); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- RESULT OVERLAY ---------- */
+.result-content h1 {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.result-content.win-result h1 {
+    color: #4ade80;
+    text-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+}
+
+.result-content.lose-result h1 {
+    color: #f87171;
+    text-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+}
+
+#result-reason {
+    font-size: 16px;
+    opacity: 0.85;
+    margin-bottom: 8px;
+}
+
+#result-time {
+    font-size: 13px;
+    opacity: 0.55;
+    margin-bottom: 24px;
+}
+
+/* ---------- BUTTONS ---------- */
+.btn-primary {
+    display: inline-block;
+    padding: 14px 44px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #111;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    margin-top: 10px;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(251, 191, 36, 0.4);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* ---------- MOBILE CONTROLS ---------- */
+#mobile-controls {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    display: none; /* shown on touch devices via JS */
+}
+
+#mobile-move-btn {
+    padding: 18px 54px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #fff;
+    background: rgba(34, 197, 94, 0.45);
+    border: 2px solid rgba(34, 197, 94, 0.6);
+    border-radius: 16px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+#mobile-move-btn:active {
+    background: rgba(34, 197, 94, 0.7);
+}
+
+/* ---------- PROGRESS BAR (distance indicator in HUD) ---------- */
+#progress-bar-container {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 240px;
+    height: 6px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 3px;
+    z-index: 21;
+    overflow: hidden;
+}
+
+#progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #4ade80, #fbbf24);
+    border-radius: 3px;
+    transition: width 0.15s ease;
+}

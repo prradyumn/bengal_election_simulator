@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Red Light, Green Light</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="game-wrapper">
+
+    <!-- ====== GAME STAGE (scrolls via camera) ====== -->
+    <!-- This div is 2x viewport width; the wrapper clips it -->
+    <div id="game-stage">
+
+        <!-- Background Layer — TWO tiles of the same image side by side -->
+        <!-- ASSET: main bg.png  (used twice to fill the 2-screen course) -->
+        <img class="bg-tile" id="bg-tile-1" src="main bg.png" alt="Background" draggable="false">
+        <img class="bg-tile" id="bg-tile-2" src="main bg.png" alt="Background" draggable="false">
+
+        <!-- Start Line Marker (left edge of screen 1) -->
+        <div id="start-line"></div>
+
+        <!-- Finish Line Marker — glowing stripe near watcher on screen 2 -->
+        <div id="finish-line">
+            <div id="finish-flag">FINISH</div>
+        </div>
+
+        <!-- NPC Character (set dynamically based on player choice) -->
+        <div id="npc" class="character">
+            <img id="npc-sprite" src="modi.png" alt="NPC" draggable="false">
+            <div class="char-shadow"></div>
+        </div>
+
+        <!-- Player Character (set dynamically based on player choice) -->
+        <div id="player" class="character">
+            <img id="player-sprite" src="raga.png" alt="Player" draggable="false">
+            <div class="char-shadow"></div>
+        </div>
+
+        <!-- Elimination flash overlay (brief red flash on loss) -->
+        <div id="elimination-flash"></div>
+
+    </div>
+    <!-- end game-stage -->
+
+    <!-- ====== WATCHER / GIANT DOLL (Mamta) ======
+         Sits OUTSIDE the scrolling stage so she is ALWAYS visible
+         on the right side of the screen.
+         ASSETS: "forward mamta.png"  = facing right = GREEN LIGHT
+                 "backward mamta.png" = facing left  = RED LIGHT   -->
+    <div id="watcher">
+        <img id="watcher-sprite" src="forward mamta.png" alt="Watcher" draggable="false">
+        <div class="char-shadow watcher-shadow"></div>
+    </div>
+
+    <!-- ====== HUD (Heads-Up Display) — stays fixed, does NOT scroll ====== -->
+    <div id="hud">
+        <div id="hud-left">
+            <div id="timer-box">
+                <span id="timer-label">TIME</span>
+                <span id="timer-display">40</span>
+            </div>
+        </div>
+        <div id="hud-center">
+            <div id="light-indicator" class="green">GREEN LIGHT</div>
+            <div id="status-text">Waiting...</div>
+        </div>
+        <div id="hud-right">
+            <!-- Loss-sound variant toggle: switches between "loss sound.mp3" and "loss sound 1.mp3" -->
+            <button id="loss-sound-btn" title="Switch Loss Sound">Loss SFX: 1</button>
+            <button id="mute-btn" title="Toggle Sound">&#128264;</button>
+            <button id="restart-btn" title="Restart Game">&#8635; Restart</button>
+        </div>
+    </div>
+
+    <!-- ====== POSTER OPENING PAGE ====== -->
+    <div id="poster-overlay" class="overlay poster-overlay">
+        <div class="poster-title">Red Light, Green Light</div>
+        <div class="poster-actions">
+            <button id="poster-start-btn" class="btn-primary">Start Game</button>
+        </div>
+    </div>
+
+    <!-- ====== CHARACTER SELECT OVERLAY ====== -->
+    <div id="select-overlay" class="overlay hidden">
+        <div class="overlay-content select-content">
+            <h1>Choose Your Runner</h1>
+            <p class="subtitle">Pick a character to play as. The other will be your AI competitor.</p>
+            <div id="char-select-grid">
+                <div class="char-card" data-char="raga">
+                    <!-- ASSET: raga.png -->
+                    <img src="raga.png" alt="Raga" draggable="false">
+                    <span class="char-name">Raga</span>
+                </div>
+                <div class="char-card" data-char="modi">
+                    <!-- ASSET: modi.png -->
+                    <img src="modi.png" alt="Modi" draggable="false">
+                    <span class="char-name">Modi</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== INTRO / INSTRUCTIONS OVERLAY ====== -->
+    <div id="intro-overlay" class="overlay hidden">
+        <div class="overlay-content intro-content">
+            <h1>Red Light, Green Light</h1>
+            <div class="instructions">
+                <p><span class="dot green-dot"></span> <strong>GREEN LIGHT</strong> &mdash; Run toward the finish line!</p>
+                <p><span class="dot red-dot"></span> <strong>RED LIGHT</strong> &mdash; STOP immediately!</p>
+                <p>Press <kbd>&rarr;</kbd> or <kbd>D</kbd> to move right.</p>
+                <p>On mobile, hold the <strong>MOVE</strong> button.</p>
+                <p>Cross both screens to reach the finish line!</p>
+                <p>If the watcher catches you moving&hellip; <strong>you lose!</strong></p>
+            </div>
+            <button id="start-btn" class="btn-primary">Start Game</button>
+        </div>
+    </div>
+
+    <!-- ====== COUNTDOWN OVERLAY ====== -->
+    <div id="countdown-overlay" class="overlay hidden">
+        <div id="countdown-text">3</div>
+    </div>
+
+    <!-- ====== RESULT OVERLAY (Win / Lose) ====== -->
+    <div id="result-overlay" class="overlay hidden">
+        <div class="overlay-content result-content">
+            <h1 id="result-title">Result</h1>
+            <p id="result-reason"></p>
+            <p id="result-time"></p>
+            <button id="result-restart-btn" class="btn-primary">Play Again</button>
+        </div>
+    </div>
+
+    <!-- ====== MOBILE CONTROLS (placeholder for touch support) ====== -->
+    <div id="mobile-controls">
+        <button id="mobile-move-btn">&#9654; MOVE</button>
+    </div>
+
+</div>
+<!-- end game-wrapper -->
+
+<!--
+    ============================================================
+    AUDIO ELEMENTS
+    Audio files are loaded and controlled entirely via JavaScript.
+    The following files are expected in the same directory:
+      - main bg music.mp3     (background music, looped)
+      - loss sound.mp3         (plays on player loss)
+      - win sound.mp3          (plays on player win)
+      - turning back sound.mp3 (plays when watcher turns to RED)
+
+    To add/change audio, update the ASSETS.audio paths in script.js.
+    ============================================================
+-->
+
+<script src="script.js"></script>
+
+</body>
+</html>
